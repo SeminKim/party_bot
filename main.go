@@ -56,7 +56,12 @@ func findPartyByMessageID(id string) (ret *Party, ok bool) {
 
 // Return pretty-print string for stuct Party.
 func (p *Party) pretty_print() string {
-	return fmt.Sprintf("%s님의 %s:(%d/%d)", p.Owner.Username, p.Name, p.CurrentPopulation, p.TargetPopulation)
+	ret := fmt.Sprintf("%s님의 %s:(%d/%d)", p.Owner.Username, p.Name, p.CurrentPopulation, p.TargetPopulation)
+	ret += "\n참가자: "
+	for user, _ := range p.Participants {
+		ret += user.Username + " "
+	}
+	return ret
 }
 
 // remove party from active-party list.
@@ -64,10 +69,29 @@ func (p *Party) removeParty() {
 	delete(ActiveParties, p.Owner.ID)
 }
 
-// add a person to party.
+// Add a person to party. This also increments current population field on party.
 func (p *Party) addRegistrant(registrant *discordgo.User) {
 	p.Participants[registrant] = NIL{}
 	p.ParticipantsID[registrant.ID] = NIL{}
+	p.CurrentPopulation += 1
+}
+
+// Remove a person from party. This also decrements current population field on party.
+func (p *Party) removeRegistrant(registrant *discordgo.User) {
+	// to ensure deletion, check ID.
+	var target *discordgo.User
+	target = nil
+	for foo, _ := range p.Participants {
+		if foo.ID == registrant.ID {
+			target = foo
+		}
+	}
+	if target == nil {
+		log.Println("Fail while removing registrant.")
+	}
+	delete(p.Participants, target)
+	delete(p.ParticipantsID, registrant.ID)
+	p.CurrentPopulation -= 1
 }
 
 func respondWithSimpleContent(s *discordgo.Session, i *discordgo.InteractionCreate, my_msg string) {
@@ -169,7 +193,7 @@ func initializeParty(i *discordgo.InteractionCreate, name string, target int) Pa
 		ParticipantsID:    make(map[string]NIL),
 		Owner:             i.Member.User,
 		TargetPopulation:  target,
-		CurrentPopulation: 1,
+		CurrentPopulation: 0,
 		Origin:            i.Interaction,
 		OriginMessageID:   "", // should be filled later
 	}
@@ -233,18 +257,46 @@ func getInParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 	// normal usecase.
-	found.CurrentPopulation += 1
-	// TODO: Update message.
 	found.addRegistrant(registrant)
-	// TODO: if target population is achieved, close and mention participants.
-
-	// printAllParties()
+	s.ChannelMessageEdit(i.ChannelID, found.OriginMessageID, found.pretty_print()) // update message.
+	respondWithSimpleContent(s, i, "등록되었습니다.")
+	time.AfterFunc(time.Second*5, func() {
+		s.InteractionResponseDelete(*AppID, i.Interaction)
+	})
+	if found.CurrentPopulation == found.TargetPopulation {
+		foo := found.Name + "ㄱㄱ: "
+		for user, _ := range found.Participants {
+			foo += user.Mention() + " "
+		}
+		s.ChannelMessageSend(i.ChannelID, foo)
+		// clean up messages.
+		s.ChannelMessageDelete(i.ChannelID, found.OriginMessageID)
+	}
 }
 
 // Unregister member to the party.
 func getOutParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
-	// TODO: IMPLEMENTATION
-	log.Println("get_out called.")
+	registrant := i.Member.User
+	found, ok := findPartyByMessageID(i.Message.ID)
+	// try to get in party, but no party found (hope this would not happen.)
+	if !ok {
+		log.Println("Error: not found")
+		respondWithSimpleContent(s, i, "Sorry, unexpected error happened.")
+		return
+	}
+	_, ok = found.ParticipantsID[registrant.ID]
+	// if not registered, deny it.
+	if !ok {
+		respondWithSimpleContent(s, i, "등록되지 않은 참가자입니다.")
+		return
+	}
+	// normal usecase.
+	found.removeRegistrant(registrant)
+	s.ChannelMessageEdit(i.ChannelID, found.OriginMessageID, found.pretty_print()) // update message.
+	respondWithSimpleContent(s, i, "등록 취소되었습니다.")
+	time.AfterFunc(time.Second*5, func() {
+		s.InteractionResponseDelete(*AppID, i.Interaction)
+	})
 }
 
 // Owner only, close the party.
