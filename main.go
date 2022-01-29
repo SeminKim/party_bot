@@ -183,6 +183,7 @@ var (
 	commandsHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
 		"겜팟구": openParty,
 		"롤할롤": openLOL,
+		"끌올":  remindParty,
 	}
 	componenetHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
 		"get_in_party":  getInParty,
@@ -266,6 +267,20 @@ func openLOL(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		log.Println("Error while getting sended response")
 	}
 	party.OriginMessageID = msg.ID
+}
+
+// Remind previous opened party to channel.
+func remindParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	found, ok := findPartyByAuthor(i.Interaction.Member)
+	// Not a owner of party.
+	if !ok {
+		respondWithSimpleContent(s, i, "활성화된 파티의 주인이 아닙니다.", 3)
+		return
+	}
+	respondWithSimpleContent(s, i, "끌올중...", -1)
+	s.InteractionResponseDelete(*AppID, i.Interaction) // Is there better way to do it?
+	prevResponse, _ := s.InteractionResponse(*AppID, found.Origin)
+	s.ChannelMessageSendReply(i.ChannelID, "ㄹㅇ루 너만오면 ㄱ", prevResponse.Reference())
 }
 
 // Register member to the party.
@@ -384,6 +399,13 @@ func main() {
 	_, err = s.ApplicationCommandCreate(*AppID, *GuildID, &discordgo.ApplicationCommand{
 		Name:        "롤할롤",
 		Description: "너만오면 5인큐임을 알리세요",
+	})
+	if err != nil {
+		log.Fatalf("Cannot create slash command: %v", err)
+	}
+	_, err = s.ApplicationCommandCreate(*AppID, *GuildID, &discordgo.ApplicationCommand{
+		Name:        "끌올",
+		Description: "진짜로 너만오면 됨을 알리세요",
 	})
 	if err != nil {
 		log.Fatalf("Cannot create slash command: %v", err)
