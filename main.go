@@ -94,7 +94,9 @@ func (p *Party) removeRegistrant(registrant *discordgo.User) {
 	p.CurrentPopulation -= 1
 }
 
-func respondWithSimpleContent(s *discordgo.Session, i *discordgo.InteractionCreate, my_msg string) {
+// helper function for responding with text.
+// if delete_after is positive integer, the response will be deleted after that seconds.
+func respondWithSimpleContent(s *discordgo.Session, i *discordgo.InteractionCreate, my_msg string, delete_after int) {
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
 		Data: &discordgo.InteractionResponseData{
@@ -103,6 +105,11 @@ func respondWithSimpleContent(s *discordgo.Session, i *discordgo.InteractionCrea
 	})
 	if err != nil {
 		log.Println("Error while responding with sipmle message: " + my_msg)
+	}
+	if delete_after > 0 {
+		time.AfterFunc(time.Second*time.Duration(delete_after), func() {
+			s.InteractionResponseDelete(*AppID, i.Interaction)
+		})
 	}
 }
 
@@ -175,7 +182,7 @@ func deleteAllCommands() {
 var (
 	commandsHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
 		"겜팟구": openParty,
-		"롤할롤": open_lol,
+		"롤할롤": openLOL,
 	}
 	componenetHandlers = map[string]func(s *discordgo.Session, i *discordgo.InteractionCreate){
 		"get_in_party":  getInParty,
@@ -213,7 +220,7 @@ func openParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	found, ok := findPartyByAuthor(i.Interaction.Member)
 	// Cannot make more than one party.
 	if ok {
-		respondWithSimpleContent(s, i, "이미 모집중인 팟이 있습니다.")
+		respondWithSimpleContent(s, i, "이미 모집중인 팟이 있습니다.", -1)
 		prevResponse, _ := s.InteractionResponse(*AppID, found.Origin)
 		s.ChannelMessageSendReply(i.ChannelID, "새 파티를 구하려면 먼저 닫아주세요.", prevResponse.Reference())
 		return
@@ -221,7 +228,7 @@ func openParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	party := parseAndInitializeParty(i)
 	// Invalid option.
 	if party.TargetPopulation < 2 {
-		respondWithSimpleContent(s, i, "인원수는 2 이상의 자연수여야 합니다.")
+		respondWithSimpleContent(s, i, "인원수는 2 이상의 자연수여야 합니다.", -1)
 		return
 	}
 	// Normal usecase.
@@ -238,7 +245,28 @@ func openParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 }
 
 // Open party with name "롤할롤" and target population 5.
-func open_lol(s *discordgo.Session, i *discordgo.InteractionCreate) {}
+func openLOL(s *discordgo.Session, i *discordgo.InteractionCreate) {
+	found, ok := findPartyByAuthor(i.Interaction.Member)
+	// Cannot make more than one party.
+	if ok {
+		respondWithSimpleContent(s, i, "이미 모집중인 팟이 있습니다.", -1)
+		prevResponse, _ := s.InteractionResponse(*AppID, found.Origin)
+		s.ChannelMessageSendReply(i.ChannelID, "새 파티를 구하려면 먼저 닫아주세요.", prevResponse.Reference())
+		return
+	}
+	// Normal usecase.
+	party := initializeParty(i, "롤할롤", 5)
+	ActiveParties[i.Member.User.ID] = &party
+	err := respondWithPartyButtonsMessage(s, i, &party)
+	if err != nil {
+		log.Println("Error while responding open_party with buttons.")
+	}
+	msg, err := s.InteractionResponse(*AppID, i.Interaction)
+	if err != nil {
+		log.Println("Error while getting sended response")
+	}
+	party.OriginMessageID = msg.ID
+}
 
 // Register member to the party.
 func getInParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
@@ -247,22 +275,19 @@ func getInParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// try to get in party, but no party found (hope this would not happen.)
 	if !ok {
 		log.Println("Error: not found")
-		respondWithSimpleContent(s, i, "Sorry, unexpected error happened.")
+		respondWithSimpleContent(s, i, "Sorry, unexpected error happened.", -1)
 		return
 	}
 	_, ok = found.ParticipantsID[registrant.ID]
 	// if already registered, deny it.
 	if ok {
-		respondWithSimpleContent(s, i, "이미 등록된 참가자입니다.")
+		respondWithSimpleContent(s, i, "이미 등록된 참가자입니다.", 3)
 		return
 	}
 	// normal usecase.
 	found.addRegistrant(registrant)
 	s.ChannelMessageEdit(i.ChannelID, found.OriginMessageID, found.pretty_print()) // update message.
-	respondWithSimpleContent(s, i, "등록되었습니다.")
-	time.AfterFunc(time.Second*5, func() {
-		s.InteractionResponseDelete(*AppID, i.Interaction)
-	})
+	respondWithSimpleContent(s, i, "등록되었습니다.", 3)
 	if found.CurrentPopulation == found.TargetPopulation {
 		foo := found.Name + "ㄱㄱ: "
 		for user, _ := range found.Participants {
@@ -278,25 +303,28 @@ func getInParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 func getOutParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	registrant := i.Member.User
 	found, ok := findPartyByMessageID(i.Message.ID)
-	// try to get in party, but no party found (hope this would not happen.)
+	// try to get out party, but no party found (hope this would not happen.)
 	if !ok {
 		log.Println("Error: not found")
-		respondWithSimpleContent(s, i, "Sorry, unexpected error happened.")
+		respondWithSimpleContent(s, i, "Sorry, unexpected error happened.", -1)
 		return
 	}
 	_, ok = found.ParticipantsID[registrant.ID]
 	// if not registered, deny it.
 	if !ok {
-		respondWithSimpleContent(s, i, "등록되지 않은 참가자입니다.")
+		respondWithSimpleContent(s, i, "등록되지 않은 참가자입니다.", 3)
 		return
 	}
+	// if user is owner, deny it.
+	if found.Owner.ID == registrant.ID {
+		respondWithSimpleContent(s, i, "파티장은 빠꾸칠 수 없습니다.", 3)
+		return
+	}
+
 	// normal usecase.
 	found.removeRegistrant(registrant)
 	s.ChannelMessageEdit(i.ChannelID, found.OriginMessageID, found.pretty_print()) // update message.
-	respondWithSimpleContent(s, i, "등록 취소되었습니다.")
-	time.AfterFunc(time.Second*5, func() {
-		s.InteractionResponseDelete(*AppID, i.Interaction)
-	})
+	respondWithSimpleContent(s, i, "등록 취소되었습니다.", 3)
 }
 
 // Owner only, close the party.
@@ -305,12 +333,9 @@ func cancelParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if ok {
 		found.removeParty()
 		s.InteractionResponseDelete(*AppID, found.Origin)
-		respondWithSimpleContent(s, i, "정상적으로 종료되었습니다.")
-		time.AfterFunc(time.Second*5, func() {
-			s.InteractionResponseDelete(*AppID, i.Interaction)
-		})
+		respondWithSimpleContent(s, i, "정상적으로 종료되었습니다.", 3)
 	} else {
-		respondWithSimpleContent(s, i, "활성화된 파티의 주인이 아닙니다.")
+		respondWithSimpleContent(s, i, "활성화된 파티의 주인이 아닙니다.", 3)
 	}
 }
 
@@ -352,6 +377,13 @@ func main() {
 				Required:    true,
 			},
 		},
+	})
+	if err != nil {
+		log.Fatalf("Cannot create slash command: %v", err)
+	}
+	_, err = s.ApplicationCommandCreate(*AppID, *GuildID, &discordgo.ApplicationCommand{
+		Name:        "롤할롤",
+		Description: "너만오면 5인큐임을 알리세요",
 	})
 	if err != nil {
 		log.Fatalf("Cannot create slash command: %v", err)
