@@ -44,14 +44,12 @@ func findPartyByAuthor(target *discordgo.Member) (ret *Party, ok bool) {
 }
 
 func findPartyByMessageID(id string) (ret *Party, ok bool) {
-
 	for _, v := range ActiveParties {
 		if v.OriginMessageID == id {
 			ret, ok = v, true
 			return
 		}
 	}
-
 	ret, ok = nil, false
 	return
 }
@@ -64,6 +62,18 @@ func (p *Party) pretty_print() string {
 // remove party from active-party list.
 func (p *Party) removeParty() {
 	delete(ActiveParties, p.Owner.ID)
+}
+
+func respondWithSimpleContent(s *discordgo.Session, i *discordgo.InteractionCreate, my_msg string) {
+	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: my_msg,
+		},
+	})
+	if err != nil {
+		log.Println("Error while responding with sipmle message: " + my_msg)
+	}
 }
 
 // Bot parameters
@@ -114,12 +124,7 @@ func openParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	var err error
 	if ok {
 		// cannot make more than one party.
-		err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "이미 모집중인 팟이 있습니다.",
-			},
-		})
+		respondWithSimpleContent(s, i, "이미 모집중인 팟이 있습니다.")
 		prevResponse, _ := s.InteractionResponse(*AppID, found.Origin)
 		s.ChannelMessageSendReply(i.ChannelID, "새 파티를 구하려면 먼저 닫아주세요.", prevResponse.Reference())
 	} else {
@@ -190,22 +195,12 @@ func getInParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	found, ok := findPartyByMessageID(i.Message.ID)
 	if !ok {
 		log.Println("Error: not found")
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "Sorry, unexpected error happened.",
-			},
-		})
+		respondWithSimpleContent(s, i, "Sorry, unexpected error happened.")
 	} else {
 		_, ok = found.ParticipantsID[registrant.ID]
 		// if already registered, deny it.
 		if ok {
-			s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content: "이미 등록된 참가자입니다.",
-				},
-			})
+			respondWithSimpleContent(s, i, "이미 등록된 참가자입니다.")
 		} else {
 			found.CurrentPopulation += 1
 			// TODO: Update message.
@@ -231,22 +226,12 @@ func cancelParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if ok {
 		found.removeParty()
 		s.InteractionResponseDelete(*AppID, found.Origin)
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "정상적으로 종료되었습니다.",
-			},
-		})
+		respondWithSimpleContent(s, i, "정상적으로 종료되었습니다.")
 		time.AfterFunc(time.Second*5, func() {
 			s.InteractionResponseDelete(*AppID, i.Interaction)
 		})
 	} else {
-		s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: "You don't have active party",
-			},
-		})
+		respondWithSimpleContent(s, i, "활성화된 파티의 주인이 아닙니다.")
 	}
 }
 
