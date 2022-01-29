@@ -64,6 +64,12 @@ func (p *Party) removeParty() {
 	delete(ActiveParties, p.Owner.ID)
 }
 
+// add a person to party.
+func (p *Party) addRegistrant(registrant *discordgo.User) {
+	p.Participants[registrant] = NIL{}
+	p.ParticipantsID[registrant.ID] = NIL{}
+}
+
 func respondWithSimpleContent(s *discordgo.Session, i *discordgo.InteractionCreate, my_msg string) {
 	err := s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
 		Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -167,8 +173,7 @@ func initializeParty(i *discordgo.InteractionCreate, name string, target int) Pa
 		Origin:            i.Interaction,
 		OriginMessageID:   "", // should be filled later
 	}
-	party.Participants[i.Member.User] = NIL{}
-	party.ParticipantsID[i.Member.User.ID] = NIL{}
+	party.addRegistrant(i.Member.User)
 	return party
 }
 
@@ -215,24 +220,24 @@ func open_lol(s *discordgo.Session, i *discordgo.InteractionCreate) {}
 func getInParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	registrant := i.Member.User
 	found, ok := findPartyByMessageID(i.Message.ID)
+	// try to get in party, but no party found (hope this would not happen.)
 	if !ok {
 		log.Println("Error: not found")
 		respondWithSimpleContent(s, i, "Sorry, unexpected error happened.")
-	} else {
-		_, ok = found.ParticipantsID[registrant.ID]
-		// if already registered, deny it.
-		if ok {
-			respondWithSimpleContent(s, i, "이미 등록된 참가자입니다.")
-		} else {
-			found.CurrentPopulation += 1
-			// TODO: Update message.
-			found.Participants[registrant] = NIL{}
-			found.ParticipantsID[registrant.ID] = NIL{}
-			log.Println(found.Participants)
-			// TODO: if target population is achieved, close and mention participants.
-		}
-
+		return
 	}
+	_, ok = found.ParticipantsID[registrant.ID]
+	// if already registered, deny it.
+	if ok {
+		respondWithSimpleContent(s, i, "이미 등록된 참가자입니다.")
+		return
+	}
+	// normal usecase.
+	found.CurrentPopulation += 1
+	// TODO: Update message.
+	found.addRegistrant(registrant)
+	// TODO: if target population is achieved, close and mention participants.
+
 	// printAllParties()
 }
 
