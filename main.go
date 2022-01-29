@@ -76,6 +76,42 @@ func respondWithSimpleContent(s *discordgo.Session, i *discordgo.InteractionCrea
 	}
 }
 
+// helper function for openParty.
+// respond with messages... THAT core message with some buttons.
+func respondWithPartyButtonsMessage(s *discordgo.Session, i *discordgo.InteractionCreate, p *Party) (err error) {
+	err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: p.pretty_print(),
+			Components: []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						discordgo.Button{
+							Label:    "드가자~",
+							Style:    discordgo.SuccessButton,
+							Disabled: false,
+							CustomID: "get_in_party",
+						},
+						discordgo.Button{
+							Label:    "빠꾸",
+							Style:    discordgo.DangerButton,
+							Disabled: false,
+							CustomID: "get_out_party",
+						},
+						discordgo.Button{
+							Label:    "폭파",
+							Style:    discordgo.SecondaryButton,
+							Disabled: false,
+							CustomID: "cancel_party",
+						},
+					},
+				},
+			},
+		},
+	})
+	return
+}
+
 // Bot parameters
 var (
 	GuildID        = flag.String("guild", "", "Test guild ID. If not passed - bot registers commands globally")
@@ -118,72 +154,58 @@ var (
 	}
 )
 
+// Origin message ID should be filled later, since it stores the bot's respond(which is not sent yet).
+// It does not check validity of parsed value. Furthermore, it does not add the party to ActiveParties.
+func initializeParty(i *discordgo.InteractionCreate, name string, target int) Party {
+	party := Party{
+		Name:              name,
+		Participants:      make(map[*discordgo.User]NIL),
+		ParticipantsID:    make(map[string]NIL),
+		Owner:             i.Member.User,
+		TargetPopulation:  target,
+		CurrentPopulation: 1,
+		Origin:            i.Interaction,
+		OriginMessageID:   "", // should be filled later
+	}
+	party.Participants[i.Member.User] = NIL{}
+	party.ParticipantsID[i.Member.User.ID] = NIL{}
+	return party
+}
+
+// parse data from interaction and call initializeParty.
+func parseAndInitializeParty(i *discordgo.InteractionCreate) Party {
+	name := i.ApplicationCommandData().Options[0].StringValue()
+	target := int(i.ApplicationCommandData().Options[1].IntValue())
+	return initializeParty(i, name, target)
+}
+
 // Parse Interaction and start new "Party".
 func openParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	found, ok := findPartyByAuthor(i.Interaction.Member)
-	var err error
+	// Cannot make more than one party.
 	if ok {
-		// cannot make more than one party.
 		respondWithSimpleContent(s, i, "이미 모집중인 팟이 있습니다.")
 		prevResponse, _ := s.InteractionResponse(*AppID, found.Origin)
 		s.ChannelMessageSendReply(i.ChannelID, "새 파티를 구하려면 먼저 닫아주세요.", prevResponse.Reference())
-	} else {
-		party := Party{
-			Name:              i.ApplicationCommandData().Options[0].StringValue(),
-			Participants:      make(map[*discordgo.User]NIL),
-			ParticipantsID:    make(map[string]NIL),
-			Owner:             i.Member.User,
-			TargetPopulation:  int(i.ApplicationCommandData().Options[1].IntValue()),
-			CurrentPopulation: 1,
-			Origin:            i.Interaction,
-			OriginMessageID:   "", // will be filled later
-		}
-		party.Participants[i.Member.User] = NIL{}
-		party.ParticipantsID[i.Member.User.ID] = NIL{}
-		ActiveParties[i.Member.User.ID] = &party
-		err = s.InteractionRespond(i.Interaction, &discordgo.InteractionResponse{
-			Type: discordgo.InteractionResponseChannelMessageWithSource,
-			Data: &discordgo.InteractionResponseData{
-				Content: party.pretty_print(),
-				Components: []discordgo.MessageComponent{
-					discordgo.ActionsRow{
-						Components: []discordgo.MessageComponent{
-							discordgo.Button{
-								Label:    "드가자~",
-								Style:    discordgo.SuccessButton,
-								Disabled: false,
-								CustomID: "get_in_party",
-							},
-							discordgo.Button{
-								Label:    "빠꾸",
-								Style:    discordgo.DangerButton,
-								Disabled: false,
-								CustomID: "get_out_party",
-							},
-							discordgo.Button{
-								Label:    "폭파",
-								Style:    discordgo.SecondaryButton,
-								Disabled: false,
-								CustomID: "cancel_party",
-							},
-						},
-					},
-				},
-			},
-		})
-		if err != nil {
-			log.Println("Error while responding open_party with buttons.")
-		}
-		msg, err := s.InteractionResponse(*AppID, i.Interaction)
-		if err != nil {
-			log.Println("Error while getting sended response")
-		}
-		party.OriginMessageID = msg.ID
+		return
 	}
-
+	party := parseAndInitializeParty(i)
+	// Invalid option.
+	if party.TargetPopulation < 2 {
+		respondWithSimpleContent(s, i, "인원수는 2 이상의 자연수여야 합니다.")
+		return
+	}
+	// Normal usecase.
+	ActiveParties[i.Member.User.ID] = &party
+	err := respondWithPartyButtonsMessage(s, i, &party)
 	if err != nil {
-		log.Println("Error while responding open_party")
+		log.Println("Error while responding open_party with buttons.")
 	}
+	msg, err := s.InteractionResponse(*AppID, i.Interaction)
+	if err != nil {
+		log.Println("Error while getting sended response")
+	}
+	party.OriginMessageID = msg.ID
 }
 
 // Open party with name "롤할롤" and target population 5.
