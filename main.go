@@ -87,7 +87,7 @@ func (p *Party) removeRegistrant(registrant *discordgo.User) {
 		}
 	}
 	if target == nil {
-		log.Println("Fail while removing registrant.")
+		log.Println("Fail while removing registrant: " + registrant.Username)
 	}
 	delete(p.Participants, target)
 	delete(p.ParticipantsID, registrant.ID)
@@ -244,7 +244,7 @@ func openParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	ActiveParties[i.Member.User.ID] = &party
 	err := respondWithPartyButtonsMessage(s, i, &party)
 	if err != nil {
-		log.Println("Error while responding open_party with buttons.")
+		log.Println("Error while responding open_party with buttons: ")
 	}
 	msg, err := s.InteractionResponse(*AppID, i.Interaction)
 	if err != nil {
@@ -297,7 +297,8 @@ func getInParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	found, ok := findPartyByMessageID(i.Message.ID)
 	// try to get in party, but no party found (hope this would not happen.)
 	if !ok {
-		log.Println("Error: not found")
+		log.Println("Error - not found: " + registrant.ID)
+		printAllParties()
 		respondWithSimpleContent(s, i, "Sorry, unexpected error happened.", -1)
 		return
 	}
@@ -328,7 +329,8 @@ func getOutParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	found, ok := findPartyByMessageID(i.Message.ID)
 	// try to get out party, but no party found (hope this would not happen.)
 	if !ok {
-		log.Println("Error: not found")
+		log.Println("Error - not found: " + registrant.ID)
+		printAllParties()
 		respondWithSimpleContent(s, i, "Sorry, unexpected error happened.", -1)
 		return
 	}
