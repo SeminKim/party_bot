@@ -174,8 +174,16 @@ func init() {
 func deleteAllCommands() {
 	commands, _ := s.ApplicationCommands(*AppID, *GuildID)
 	for _, curr := range commands {
-		fmt.Println("delete: " + curr.Name)
+		log.Println("delete: " + curr.Name)
 		s.ApplicationCommandDelete(*AppID, *GuildID, curr.ID)
+	}
+}
+
+func deleteAllParties() {
+	for _, p := range ActiveParties {
+		s.ChannelMessageDelete(p.Origin.ChannelID, p.OriginMessageID)
+		log.Println(p.Name + " by " + p.Owner.Username + " deleted.")
+		p.removeParty()
 	}
 }
 
@@ -418,6 +426,7 @@ func main() {
 	// Delete all registered commands at end.
 	defer s.Close()
 	defer deleteAllCommands()
+	defer deleteAllParties()
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, os.Interrupt)
 	<-stop
