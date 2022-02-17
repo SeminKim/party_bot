@@ -251,6 +251,7 @@ func openParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		log.Println("Error while getting sended response")
 	}
 	party.OriginMessageID = msg.ID
+	log.Println("openParty called by ", i.Member.User.Username, ", message ID is ", msg.ID)
 }
 
 // Open party with name "롤할롤" and target population 5.
@@ -275,6 +276,7 @@ func openLOL(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		log.Println("Error while getting sended response")
 	}
 	party.OriginMessageID = msg.ID
+	log.Println("openLOL called by ", i.Member.User.Username, ", message ID is ", msg.ID)
 }
 
 // Remind previous opened party to channel.
@@ -357,7 +359,8 @@ func cancelParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	found, ok := findPartyByAuthor(i.Member)
 	if ok {
 		found.removeParty()
-		s.InteractionResponseDelete(*AppID, found.Origin)
+		s.ChannelMessageDelete(found.Origin.ChannelID, found.OriginMessageID) // interaction delete or message delete?
+		// s.InteractionResponseDelete(*AppID, found.Origin)
 		respondWithSimpleContent(s, i, "정상적으로 종료되었습니다.", 3)
 	} else {
 		respondWithSimpleContent(s, i, "활성화된 파티의 주인이 아닙니다.", 3)
