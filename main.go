@@ -17,14 +17,15 @@ type NIL struct{}
 
 // Struct for managing party.
 type Party struct {
-	Name              string
-	Participants      map[*discordgo.User]NIL
-	ParticipantsID    map[string]NIL
-	Owner             *discordgo.User
-	TargetPopulation  int
-	CurrentPopulation int
-	Origin            *discordgo.Interaction
-	OriginMessageID   string
+	Name                   string
+	Participants           map[*discordgo.User]NIL
+	ParticipantsID         map[string]NIL
+	Owner                  *discordgo.User
+	TargetPopulation       int
+	CurrentPopulation      int
+	Origin                 *discordgo.Interaction
+	OriginMessageReference discordgo.MessageReference
+	OriginMessageID        string // shortcut for OriginMessageReference.MessageID
 }
 
 // Map containing all active parties.
@@ -202,6 +203,7 @@ var (
 
 // Origin message ID should be filled later, since it stores the bot's respond(which is not sent yet).
 // It does not check validity of parsed value. Furthermore, it does not add the party to ActiveParties.
+// NOTE: This does not fill OriginMessageID and OriginMessageReference!!
 func initializeParty(i *discordgo.InteractionCreate, name string, target int) Party {
 	party := Party{
 		Name:              name,
@@ -211,7 +213,6 @@ func initializeParty(i *discordgo.InteractionCreate, name string, target int) Pa
 		TargetPopulation:  target,
 		CurrentPopulation: 0,
 		Origin:            i.Interaction,
-		OriginMessageID:   "", // should be filled later
 	}
 	party.addRegistrant(i.Member.User)
 	return party
@@ -230,8 +231,7 @@ func openParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// Cannot make more than one party.
 	if ok {
 		respondWithSimpleContent(s, i, "이미 모집중인 팟이 있습니다.", -1)
-		prevResponse, _ := s.InteractionResponse(*AppID, found.Origin)
-		s.ChannelMessageSendReply(i.ChannelID, "새 파티를 구하려면 먼저 닫아주세요.", prevResponse.Reference())
+		s.ChannelMessageSendReply(i.ChannelID, "새 파티를 구하려면 먼저 닫아주세요.", &found.OriginMessageReference)
 		return
 	}
 	party := parseAndInitializeParty(i)
@@ -251,6 +251,7 @@ func openParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		log.Println("Error while getting sended response")
 	}
 	party.OriginMessageID = msg.ID
+	party.OriginMessageReference = *msg.Reference()
 	log.Println("openParty called by ", i.Member.User.Username, ", message ID is ", msg.ID)
 }
 
@@ -260,8 +261,7 @@ func openLOL(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	// Cannot make more than one party.
 	if ok {
 		respondWithSimpleContent(s, i, "이미 모집중인 팟이 있습니다.", -1)
-		prevResponse, _ := s.InteractionResponse(*AppID, found.Origin)
-		s.ChannelMessageSendReply(i.ChannelID, "새 파티를 구하려면 먼저 닫아주세요.", prevResponse.Reference())
+		s.ChannelMessageSendReply(i.ChannelID, "새 파티를 구하려면 먼저 닫아주세요.", &found.OriginMessageReference)
 		return
 	}
 	// Normal usecase.
@@ -276,6 +276,7 @@ func openLOL(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		log.Println("Error while getting sended response")
 	}
 	party.OriginMessageID = msg.ID
+	party.OriginMessageReference = *msg.Reference()
 	log.Println("openLOL called by ", i.Member.User.Username, ", message ID is ", msg.ID)
 }
 
@@ -289,8 +290,7 @@ func remindParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	}
 	respondWithSimpleContent(s, i, "끌올중...", -1)
 	s.InteractionResponseDelete(*AppID, i.Interaction) // Is there better way to do it?
-	prevResponse, _ := s.InteractionResponse(*AppID, found.Origin)
-	s.ChannelMessageSendReply(i.ChannelID, "ㄹㅇ루 너만오면 ㄱ", prevResponse.Reference())
+	s.ChannelMessageSendReply(i.ChannelID, "ㄹㅇ루 너만오면 ㄱ", &found.OriginMessageReference)
 }
 
 // Register member to the party.
