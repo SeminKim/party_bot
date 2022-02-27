@@ -314,6 +314,7 @@ func getInParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	found.addRegistrant(registrant)
 	s.ChannelMessageEdit(i.ChannelID, found.OriginMessageID, found.pretty_print()) // update message.
 	respondWithSimpleContent(s, i, "등록되었습니다.", 3)
+	// when target population is achieved.
 	if found.CurrentPopulation == found.TargetPopulation {
 		foo := found.Name + "ㄱㄱ: "
 		for user, _ := range found.Participants {
@@ -322,6 +323,8 @@ func getInParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		s.ChannelMessageSend(i.ChannelID, foo)
 		// clean up messages.
 		s.ChannelMessageDelete(i.ChannelID, found.OriginMessageID)
+		// delete from active party list.
+		found.removeParty()
 	}
 }
 
