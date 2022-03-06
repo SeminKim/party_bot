@@ -38,6 +38,6 @@ jobs:
         # content of ssh private key. ex raw content of ~/.ssh/id_rsa
         key: ${{ secrets.REMOTE_KEY }}
         # source to copy from
-        source: ./go_bot
+        source: "./go_bot"
         # destination to download on server
-        target: /home/${{ secrets.USERNAME }}/
+        target: "~/"
