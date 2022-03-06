@@ -27,7 +27,7 @@ jobs:
         host: ${{ secrets.HOST }}
         username: ${{ secrets.USERNAME }}
         port: 22
-        key: ${{ secrets.KEY }}
+        key: ${{ secrets.REMOTE_KEY }}
         source: "./go_bot"
         target: "~/"
 
