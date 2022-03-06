@@ -20,13 +20,7 @@ jobs:
 
     - name: Build
       run: go build -v ./...
-    
-    - name: upload binary artifact
-      uses: actions/upload-artifact@v2
-      with:
-        name: go_bot
-        path: ./go_bot
-        
+      
     - name: scp-deployer
       uses: siva1024/scp-deployer@v1.0
       with:
@@ -34,10 +28,17 @@ jobs:
         host: ${{ secrets.HOST }}
         # ssh remote user
         username: ${{ secrets.USERNAME }}
-        # ssh remote port
         # content of ssh private key. ex raw content of ~/.ssh/id_rsa
         key: ${{ secrets.REMOTE_KEY }}
         # source to copy from
         source: "./go_bot"
         # destination to download on server
         target: "~/"
+
+    
+    - name: upload binary artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: go_bot
+        path: ./go_bot
+        
