@@ -109,7 +109,7 @@ func respondWithSimpleContent(s *discordgo.Session, i *discordgo.InteractionCrea
 	}
 	if delete_after > 0 {
 		time.AfterFunc(time.Second*time.Duration(delete_after), func() {
-			s.InteractionResponseDelete(*AppID, i.Interaction)
+			s.InteractionResponseDelete(i.Interaction)
 		})
 	}
 }
@@ -246,7 +246,7 @@ func openParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if err != nil {
 		log.Println("Error while responding open_party with buttons: ")
 	}
-	msg, err := s.InteractionResponse(*AppID, i.Interaction)
+	msg, err := s.InteractionResponse(i.Interaction)
 	if err != nil {
 		log.Println("Error while getting sended response")
 	}
@@ -271,7 +271,7 @@ func openLOL(s *discordgo.Session, i *discordgo.InteractionCreate) {
 	if err != nil {
 		log.Println("Error while responding open_party with buttons.")
 	}
-	msg, err := s.InteractionResponse(*AppID, i.Interaction)
+	msg, err := s.InteractionResponse(i.Interaction)
 	if err != nil {
 		log.Println("Error while getting sended response")
 	}
@@ -289,7 +289,7 @@ func remindParty(s *discordgo.Session, i *discordgo.InteractionCreate) {
 		return
 	}
 	respondWithSimpleContent(s, i, "끌올중...", -1)
-	s.InteractionResponseDelete(*AppID, i.Interaction) // Is there better way to do it?
+	s.InteractionResponseDelete(i.Interaction) // Is there better way to do it?
 	s.ChannelMessageSendReply(i.ChannelID, "ㄹㅇ루 너만오면 ㄱ", &found.OriginMessageReference)
 }
 

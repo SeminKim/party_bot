@@ -1,8 +1,8 @@
 module github.com/seminkim/go_bot
 
-go 1.17
+go 1.19
 
-require github.com/bwmarrin/discordgo v0.23.3-0.20211228023845-29269347e820
+require github.com/bwmarrin/discordgo v0.26.1
 
 require (
 	github.com/gorilla/websocket v1.4.2 // indirect
